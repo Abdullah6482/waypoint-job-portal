@@ -31,6 +31,13 @@ Thumbs.db
 *.key
 *.p12
 *.pfx
+*.ppk
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
 *.db
 *.sqlite
 *.sqlite3
