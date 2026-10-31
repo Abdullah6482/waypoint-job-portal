@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit listing" if mode == "edit" else "Post a job" }}{% endblock %}
+{% block content %}
+  <section class="form-page">
+    <a class="back-link" href="{{ url_for('dashboard') }}">← &nbsp; Back to dashboard</a>
+    <div class="form-heading"><div class="eyebrow">GROW YOUR TEAM</div><h1>{{ "Update your listing" if mode == "edit" else "Find your next teammate." }}</h1><p>Share the details that help the right candidate picture themselves here.</p></div>
+    <form class="job-editor panel" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="editor-grid">
+        <div class="editor-wide"><label for="title">Job title</label><input id="title" name="title" maxlength="100" value="{{ job.title if job else '' }}" placeholder="e.g. Product Designer" required></div>
+        <div><label for="location">Location</label><input id="location" name="location" maxlength="100" value="{{ job.location if job else '' }}" placeholder="e.g. New York, NY or Remote" required></div>
+        <div><label for="job_type">Work type</label><select id="job_type" name="job_type" required>{% for item in job_types %}<option value="{{ item }}" {% if job and job.job_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+        <div><label for="category">Category</label><select id="category" name="category" required>{% for item in categories %}<option value="{{ item }}" {% if job and job.category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+        <div><label for="salary_min">Minimum salary <span>(optional, annual USD)</span></label><input id="salary_min" name="salary_min" type="number" min="1" max="10000000" step="1" value="{{ job.salary_min if job and job.salary_min else '' }}" placeholder="e.g. 80000"></div>
+        <div><label for="salary_max">Maximum salary <span>(optional, annual USD)</span></label><input id="salary_max" name="salary_max" type="number" min="1" max="10000000" step="1" value="{{ job.salary_max if job and job.salary_max else '' }}" placeholder="e.g. 120000"></div>
+        <div class="editor-wide"><label for="description">About the role</label><textarea id="description" name="description" maxlength="10000" rows="10" placeholder="Describe the role, responsibilities, and what you’re looking for..." required>{{ job.description if job else '' }}</textarea><span class="input-hint">Share useful details about responsibilities and qualifications.</span></div>
+        {% if mode == "edit" %}<div class="editor-wide"><label for="status">Listing status</label><select id="status" name="status"><option value="open" {% if job.status == "open" %}selected{% endif %}>Open — accepting applications</option><option value="closed" {% if job.status == "closed" %}selected{% endif %}>Closed — not accepting applications</option></select></div>{% endif %}
+      </div>
+      <div class="editor-actions"><a class="button button-outline" href="{{ url_for('dashboard') }}">Cancel</a><button class="button button-dark" type="submit">{{ "Save changes" if mode == "edit" else "Publish job" }} <span>→</span></button></div>
+    </form>
+  </section>
+{% endblock %}

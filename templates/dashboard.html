@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+  <section class="dashboard-page">
+    <div class="dashboard-title">
+      <div><div class="eyebrow">{{ "CANDIDATE SPACE" if current_user.role == "seeker" else ("HIRING WORKSPACE" if current_user.role == "employer" else "PLATFORM OVERVIEW") }}</div>
+      <h1>{{ "Your job search." if current_user.role == "seeker" else ("Build a great team." if current_user.role == "employer" else "Good morning, admin.") }}</h1>
+      <p>{{ "Keep up with the roles you’ve applied for." if current_user.role == "seeker" else ("Manage your listings and meet your next teammate." if current_user.role == "employer" else "A snapshot of what’s happening across Waypoint.") }}</p></div>
+      {% if current_user.role == "employer" %}<a class="button button-dark" href="{{ url_for('create_job') }}">＋ &nbsp; Post a job</a>{% endif %}
+    </div>
+
+    {% if current_user.role == "seeker" %}
+      <section class="dashboard-panel panel"><div class="dash-panel-head"><div><div class="eyebrow">YOUR ACTIVITY</div><h2>Applications</h2></div><a class="text-link" href="{{ url_for('home') }}">Explore jobs →</a></div>
+        {% if applications %}<div class="dash-list">{% for app in applications %}<div class="dash-row"><span class="company-avatar">{{ app.company[:1]|upper }}</span><div class="dash-row-main"><a class="dash-row-title" href="{{ url_for('job_detail', job_id=app.job_id) }}">{{ app.title }}</a><span>{{ app.company }} · {{ app.location }}</span></div><span class="status-pill status-{{ app.status|lower }}">{{ app.status }}</span><span class="row-date">{{ app.created_at[:10] }}</span></div>{% endfor %}</div>
+        {% else %}<div class="empty-state compact"><div class="empty-icon">↗</div><h3>Your next step starts with one application</h3><p>Browse open roles and find one that feels right.</p><a class="button button-dark" href="{{ url_for('home') }}">Explore open jobs <span>→</span></a></div>{% endif %}
+      </section>
+
+    {% elif current_user.role == "employer" %}
+      <section class="dashboard-panel panel"><div class="dash-panel-head"><div><div class="eyebrow">YOUR OPENINGS</div><h2>Job listings</h2></div><span class="results-count">{{ jobs|length }} <span>total</span></span></div>
+        {% if jobs %}<div class="dash-list">{% for job in jobs %}<div class="dash-row"><span class="company-avatar">{{ job.title[:1]|upper }}</span><div class="dash-row-main"><a class="dash-row-title" href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a><span>{{ job.location }} · {{ job.job_type }}</span></div><span class="status-pill {{ 'status-open' if job.status == 'open' else 'status-closed' }}">{{ job.status }}</span><span class="app-count">{{ job.application_count }} {{ "application" if job.application_count == 1 else "applications" }}</span><a class="row-action" href="{{ url_for('edit_job', job_id=job.id) }}">Edit</a></div>{% endfor %}</div>
+        {% else %}<div class="empty-state compact"><div class="empty-icon">＋</div><h3>Your first listing is a few details away</h3><p>Post a role and find the right person for your team.</p><a class="button button-dark" href="{{ url_for('create_job') }}">Post a job <span>→</span></a></div>{% endif %}
+      </section>
+      <section class="dashboard-panel panel secondary-panel"><div class="dash-panel-head"><div><div class="eyebrow">MEET YOUR CANDIDATES</div><h2>Recent applications</h2></div></div>
+        {% if applications %}<div class="dash-list">{% for app in applications %}<div class="dash-row application-row"><div class="candidate-avatar">{{ app.seeker_name[:1]|upper }}</div><div class="dash-row-main"><span class="dash-row-title">{{ app.seeker_name }}</span><span>{{ app.seeker_email }} · applied for {{ app.job_title }}</span>{% if app.cover_letter %}<p class="cover-preview">{{ app.cover_letter }}</p>{% endif %}{% if app.resume_url %}<a class="text-link resume-link" href="{{ app.resume_url }}" target="_blank" rel="noopener noreferrer">View resume / portfolio ↗</a>{% endif %}</div><form class="status-form" method="post" action="{{ url_for('update_application_status', application_id=app.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><select name="status" aria-label="Application status">{% for status in application_statuses %}<option value="{{ status }}" {% if app.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select><button class="row-action" type="submit">Save</button></form></div>{% endfor %}</div>
+        {% else %}<div class="empty-inline">Applications will appear here when candidates apply.</div>{% endif %}
+      </section>
+
+    {% else %}
+      <section class="stats-grid">{% for label, value in [("Community members", stats.users), ("Job listings", stats.jobs), ("Open roles", stats.open_jobs), ("Applications", stats.applications)] %}<article class="stat-card panel"><div class="eyebrow">{{ label }}</div><strong>{{ value }}</strong><span>Across Waypoint</span></article>{% endfor %}</section>
+      <section class="dashboard-panel panel secondary-panel"><div class="dash-panel-head"><div><div class="eyebrow">COMMUNITY</div><h2>Manage user accounts</h2></div></div>
+        <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Member</th><th>Account</th><th>Joined</th><th>Status</th><th></th></tr></thead><tbody>{% for user in users %}<tr><td><strong>{{ user.name }}</strong><span>{{ user.email }}</span></td><td>{{ "Employer · " ~ user.company if user.role == "employer" else user.role|title }}</td><td>{{ user.created_at[:10] }}</td><td><span class="status-pill {{ 'status-open' if user.is_active else 'status-closed' }}">{{ "Active" if user.is_active else "Inactive" }}</span></td><td>{% if user.role != "admin" %}<form method="post" action="{{ url_for('toggle_user', user_id=user.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="row-action" type="submit">{{ "Deactivate" if user.is_active else "Activate" }}</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+      </section>
+      <section class="dashboard-panel panel secondary-panel"><div class="dash-panel-head"><div><div class="eyebrow">LATEST ACTIVITY</div><h2>Recent job listings</h2></div></div>
+        {% if recent_jobs %}<div class="dash-list">{% for job in recent_jobs %}<div class="dash-row"><span class="company-avatar">{{ job.company[:1]|upper }}</span><div class="dash-row-main"><a class="dash-row-title" href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a><span>{{ job.company }} · posted by {{ job.employer_name }}</span></div><span class="status-pill {{ 'status-open' if job.status == 'open' else 'status-closed' }}">{{ job.status }}</span><a class="row-action" href="{{ url_for('edit_job', job_id=job.id) }}">Manage</a></div>{% endfor %}</div>{% else %}<div class="empty-inline">No listings have been published yet.</div>{% endif %}
+      </section>
+    {% endif %}
+  </section>
+{% endblock %}

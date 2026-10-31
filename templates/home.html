@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Find your next step{% endblock %}
+{% block content %}
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow"><span class="eyebrow-dot"></span> A better way to find your next role</div>
+      <h1>Good work starts<br>with <span>the right fit.</span></h1>
+      <p>Discover opportunities from teams building what’s next.</p>
+      <form class="search-panel" action="{{ url_for('home') }}" method="get">
+        <label class="search-field"><span>⌕</span><input name="q" value="{{ search }}" placeholder="Role, company, or keyword" aria-label="Role, company, or keyword"></label>
+        <label class="search-field"><span>⌖</span><input name="location" value="{{ location }}" placeholder="City or remote" aria-label="Location"></label>
+        <button class="button button-dark" type="submit">Explore jobs <span>→</span></button>
+      </form>
+      <div class="hero-note">Thoughtful teams. Meaningful work. Your next chapter.</div>
+    </div>
+    <div class="hero-ornament" aria-hidden="true"><span>✳</span><i></i><i></i><i></i></div>
+  </section>
+
+  <section class="jobs-section">
+    <div class="section-header">
+      <div><div class="eyebrow">OPPORTUNITIES</div><h2>Find your next role<span class="green-dot">.</span></h2></div>
+      <div class="results-count">{{ jobs|length }} <span>open {{ "role" if jobs|length == 1 else "roles" }}</span></div>
+    </div>
+    <form class="filters" action="{{ url_for('home') }}" method="get">
+      <input type="hidden" name="q" value="{{ search }}">
+      <input type="hidden" name="location" value="{{ location }}">
+      <label><span class="sr-only">Job type</span><select name="type" onchange="this.form.submit()"><option value="">All job types</option>{% for item in job_types %}<option value="{{ item }}" {% if selected_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label>
+      <label><span class="sr-only">Category</span><select name="category" onchange="this.form.submit()"><option value="">All categories</option>{% for item in categories %}<option value="{{ item }}" {% if selected_category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label>
+      {% if search or location or selected_type or selected_category %}<a class="clear-filters" href="{{ url_for('home') }}">Clear filters</a>{% endif %}
+    </form>
+    {% if jobs %}
+      <div class="job-grid">
+        {% for job in jobs %}
+          <a class="job-card" href="{{ url_for('job_detail', job_id=job.id) }}">
+            <div class="job-card-top"><span class="company-avatar avatar-{{ loop.index % 5 }}">{{ job.company[:1]|upper }}</span><span class="job-type">{{ job.job_type }}</span></div>
+            <div class="job-card-company">{{ job.company }}</div>
+            <h3>{{ job.title }}</h3>
+            <p class="job-location"><span>⌖</span> {{ job.location }}</p>
+            <div class="job-card-bottom"><span class="category-pill">{{ job.category }}</span><span class="job-date">{{ job.created_at[:10] }}</span></div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state"><div class="empty-icon">⌕</div><h3>No matching roles just yet</h3><p>Try changing your search or clearing the filters.</p><a class="button button-outline" href="{{ url_for('home') }}">See all open roles</a></div>
+    {% endif %}
+  </section>
+{% endblock %}

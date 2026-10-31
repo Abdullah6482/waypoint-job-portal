@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ "Create an account" if mode == "register" else "Welcome back" }}{% endblock %}
+{% block content %}
+  <section class="auth-page">
+    <div class="auth-aside"><div class="eyebrow">YOUR NEXT CHAPTER</div><h1>Make work<br>work for you<span>.</span></h1><p>Find a team that sees your potential, or meet the person who will help your company grow.</p><div class="quote-mark">“</div><blockquote>Good things happen when the right people find each other.</blockquote><div class="quote-byline">THE WAYPOINT WAY</div></div>
+    <div class="auth-card">
+      <div class="eyebrow">{{ "JOIN THE COMMUNITY" if mode == "register" else "WELCOME BACK" }}</div>
+      <h2>{{ "Create your account" if mode == "register" else "Sign in to Waypoint" }}</h2>
+      <p class="auth-intro">{{ "Choose how you’d like to get started." if mode == "register" else "Your next step is waiting." }}</p>
+      <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if mode == "register" %}
+          <label for="name">Full name</label><input id="name" name="name" maxlength="80" autocomplete="name" required>
+          <label for="role">I’m here as a</label>
+          <select id="role" name="role" required><option value="seeker">Job seeker</option><option value="employer">Employer</option></select>
+          <div id="company-field" hidden><label for="company">Company name</label><input id="company" name="company" maxlength="100" autocomplete="organization"></div>
+        {% endif %}
+        <label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
+        <label for="password">Password</label><input id="password" name="password" type="password" minlength="10" maxlength="128" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}" required>
+        {% if mode == "register" %}<span class="input-hint">Use at least 10 characters.</span>{% endif %}
+        <button class="button button-dark auth-submit" type="submit">{{ "Create account" if mode == "register" else "Sign in" }} <span>→</span></button>
+      </form>
+      <p class="auth-switch">{{ "Already have an account?" if mode == "register" else "New to Waypoint?" }} <a href="{{ url_for('login' if mode == 'register' else 'register') }}">{{ "Sign in" if mode == "register" else "Create an account" }}</a></p>
+      <div class="privacy-note">◇ &nbsp; Your details stay private to your account.</div>
+    </div>
+  </section>
+  {% if mode == "register" %}<script defer src="{{ url_for('static', filename='auth.js') }}"></script>{% endif %}
+{% endblock %}
