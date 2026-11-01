@@ -4,7 +4,9 @@ import sqlite3
 import tempfile
 import unittest
 
-from app import app, init_db
+from flask import Flask, request
+
+from app import app, configure_app, init_db
 
 
 class JobPortalTests(unittest.TestCase):
@@ -12,6 +14,8 @@ class JobPortalTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         app.config.update(
             TESTING=True,
+            APP_ENV="development",
+            ALLOW_ADMIN_BOOTSTRAP=False,
             SECRET_KEY="test-secret",
             DATABASE=os.path.join(self.temp_dir.name, "test.sqlite3"),
         )
@@ -161,6 +165,93 @@ class JobPortalTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"PLATFORM OVERVIEW", response.data)
+
+        second_admin = app.test_cli_runner().invoke(
+            args=["create-admin"],
+            input="other@example.com\nAnother Admin\n",
+        )
+        self.assertNotEqual(second_admin.exit_code, 0)
+        self.assertIn("An administrator account already exists.", second_admin.output)
+
+    def test_production_requires_secret_and_enforces_secure_cookie_and_proxy_settings(self):
+        candidate = Flask("production-settings-test")
+        with self.assertRaisesRegex(RuntimeError, "persistent SECRET_KEY"):
+            configure_app(candidate, {"APP_ENV": "production"})
+        with self.assertRaisesRegex(RuntimeError, "at least 32 bytes"):
+            configure_app(
+                candidate,
+                {"APP_ENV": "production", "SECRET_KEY": "too-short"},
+            )
+
+        configure_app(
+            candidate,
+            {
+                "APP_ENV": "production",
+                "SECRET_KEY": "s" * 64,
+                "TRUSTED_PROXY_COUNT": "1",
+                "FLASK_DEBUG": "1",
+            },
+        )
+        self.assertTrue(candidate.config["SESSION_COOKIE_SECURE"])
+        self.assertFalse(candidate.config["DEBUG"])
+        self.assertEqual(candidate.config["TRUSTED_PROXY_COUNT"], 1)
+
+        @candidate.get("/")
+        def secure_request():
+            return {"secure": request.is_secure}
+
+        response = candidate.test_client().get(
+            "/", headers={"X-Forwarded-Proto": "https"}
+        )
+        self.assertEqual(response.json, {"secure": True})
+
+        no_proxy = Flask("untrusted-forwarded-header-test")
+        configure_app(
+            no_proxy,
+            {"APP_ENV": "production", "SECRET_KEY": "s" * 64},
+        )
+
+        @no_proxy.get("/")
+        def untrusted_request():
+            return {"secure": request.is_secure}
+
+        response = no_proxy.test_client().get(
+            "/", headers={"X-Forwarded-Proto": "https"}
+        )
+        self.assertEqual(response.json, {"secure": False})
+
+    def test_production_admin_bootstrap_requires_explicit_opt_in(self):
+        app.config.update(APP_ENV="production", ALLOW_ADMIN_BOOTSTRAP=False)
+        try:
+            result = app.test_cli_runner().invoke(args=["create-admin"])
+            app.config["ALLOW_ADMIN_BOOTSTRAP"] = True
+            opted_in = app.test_cli_runner().invoke(
+                args=["create-admin"],
+                input=(
+                    "production-admin@example.com\nProduction Admin\n"
+                    "a-strong-admin-password\na-strong-admin-password\n"
+                ),
+            )
+        finally:
+            app.config.update(APP_ENV="development", ALLOW_ADMIN_BOOTSTRAP=False)
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Production admin bootstrap is disabled.", result.output)
+        self.assertEqual(opted_in.exit_code, 0, opted_in.output)
+
+    def test_hsts_is_only_added_to_production_https_responses(self):
+        app.config["APP_ENV"] = "production"
+        try:
+            secure_response = self.client.get(
+                "/", environ_overrides={"wsgi.url_scheme": "https"}
+            )
+            http_response = self.client.get("/")
+        finally:
+            app.config["APP_ENV"] = "development"
+        self.assertEqual(
+            secure_response.headers["Strict-Transport-Security"],
+            "max-age=31536000",
+        )
+        self.assertNotIn("Strict-Transport-Security", http_response.headers)
 
 
 if __name__ == "__main__":

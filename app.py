@@ -20,20 +20,61 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
 ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, instance_path=str(ROOT / "instance"))
 Path(app.instance_path).mkdir(parents=True, exist_ok=True)
-app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
-    DATABASE=os.environ.get("DATABASE", str(Path(app.instance_path) / "jobs.sqlite3")),
-    MAX_CONTENT_LENGTH=16 * 1024,
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE") == "1",
-)
+
+
+def configure_app(application, environ=None):
+    environ = os.environ if environ is None else environ
+    environment = environ.get("APP_ENV", "development").strip().lower()
+    if environment not in ("development", "production"):
+        raise RuntimeError("APP_ENV must be either 'development' or 'production'.")
+
+    secret_key = environ.get("SECRET_KEY")
+    if environment == "production":
+        if not secret_key or len(secret_key.encode("utf-8")) < 32:
+            raise RuntimeError(
+                "Production requires a persistent SECRET_KEY of at least 32 bytes."
+            )
+    elif not secret_key:
+        secret_key = secrets.token_hex(32)
+
+    try:
+        trusted_proxy_count = int(environ.get("TRUSTED_PROXY_COUNT", "0"))
+    except ValueError as error:
+        raise RuntimeError("TRUSTED_PROXY_COUNT must be a non-negative integer.") from error
+    if trusted_proxy_count < 0:
+        raise RuntimeError("TRUSTED_PROXY_COUNT must be a non-negative integer.")
+
+    application.config.update(
+        APP_ENV=environment,
+        DEBUG=environment == "development" and environ.get("FLASK_DEBUG") == "1",
+        SECRET_KEY=secret_key,
+        DATABASE=environ.get(
+            "DATABASE", str(Path(application.instance_path) / "jobs.sqlite3")
+        ),
+        MAX_CONTENT_LENGTH=16 * 1024,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=(
+            environment == "production" or environ.get("COOKIE_SECURE") == "1"
+        ),
+        ALLOW_ADMIN_BOOTSTRAP=environ.get("ALLOW_ADMIN_BOOTSTRAP") == "1",
+        TRUSTED_PROXY_COUNT=trusted_proxy_count,
+    )
+    if trusted_proxy_count:
+        application.wsgi_app = ProxyFix(
+            application.wsgi_app, x_proto=trusted_proxy_count
+        )
+    return application
+
+
+configure_app(app)
 
 JOB_TYPES = ("Full-time", "Part-time", "Contract", "Internship", "Remote")
 CATEGORIES = (
@@ -141,6 +182,8 @@ def security_headers(response):
         "default-src 'self'; style-src 'self'; form-action 'self'; "
         "frame-ancestors 'none'; base-uri 'self'"
     )
+    if app.config["APP_ENV"] == "production" and request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
     return response
 
 
@@ -581,7 +624,20 @@ def toggle_user(user_id):
 @app.cli.command("create-admin")
 def create_admin():
     """Create the first administrator account with hidden password prompts."""
+    if (
+        app.config["APP_ENV"] == "production"
+        and not app.config["ALLOW_ADMIN_BOOTSTRAP"]
+    ):
+        raise click.ClickException(
+            "Production admin bootstrap is disabled. Set "
+            "ALLOW_ADMIN_BOOTSTRAP=1 only for this one-time command."
+        )
     init_db()
+    admin_exists = get_db().execute(
+        "SELECT 1 FROM users WHERE role = 'admin' LIMIT 1"
+    ).fetchone()
+    if admin_exists:
+        raise click.ClickException("An administrator account already exists.")
     email = click.prompt("Administrator email").strip().lower()
     if not valid_email(email):
         raise click.ClickException("Enter a valid email address.")
@@ -606,5 +662,5 @@ if __name__ == "__main__":
     app.run(
         host=os.environ.get("HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", "5001")),
-        debug=os.environ.get("FLASK_DEBUG") == "1",
+        debug=app.config["DEBUG"],
     )
